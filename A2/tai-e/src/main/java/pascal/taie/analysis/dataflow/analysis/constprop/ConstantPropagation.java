@@ -40,6 +40,8 @@ import pascal.taie.language.type.PrimitiveType;
 import pascal.taie.language.type.Type;
 import pascal.taie.util.AnalysisException;
 
+import java.security.Key;
+
 public class ConstantPropagation extends
         AbstractDataflowAnalysis<Stmt, CPFact> {
 
@@ -57,18 +59,23 @@ public class ConstantPropagation extends
     @Override
     public CPFact newBoundaryFact(CFG<Stmt> cfg) {
         // TODO - finish me
-        return null;
+        return new CPFact();
     }
 
     @Override
     public CPFact newInitialFact() {
-        // TODO - finish me
-        return null;
+        return new CPFact();
     }
 
     @Override
     public void meetInto(CPFact fact, CPFact target) {
         // TODO - finish me
+        for(Var var:fact.keySet()){
+            Value v1 = fact.get(var);
+            Value v2 = target.get(var);
+            Value res = meetValue(v1, v2);
+            target.update(var, res);
+        }
     }
 
     /**
@@ -76,7 +83,24 @@ public class ConstantPropagation extends
      */
     public Value meetValue(Value v1, Value v2) {
         // TODO - finish me
-        return null;
+        if (v1.isNAC() || v2.isNAC()) {
+            return Value.getNAC();
+        }
+        if (v1.isUndef() && v2.isUndef()) {
+            return Value.getUndef();
+        }
+        if (v1.isConstant() && v2.isConstant()) {
+            if (v1.getConstant() != v2.getConstant()) {
+                return Value.getNAC();
+            } else {
+                return v1;
+            }
+        }
+        if (v1.isConstant())
+            return v1;
+        if (v2.isConstant())
+            return v2;
+        return Value.getUndef();
     }
 
     @Override
@@ -112,6 +136,113 @@ public class ConstantPropagation extends
      */
     public static Value evaluate(Exp exp, CPFact in) {
         // TODO - finish me
-        return null;
+        if (exp instanceof Var) {
+            Var v = (Var) exp;
+            return in.get(v);
+        }
+        if (exp instanceof IntLiteral) {
+            IntLiteral i = (IntLiteral) exp;
+            return Value.makeConstant(i.getValue());
+        }
+        if (exp instanceof BinaryExp) {
+            BinaryExp bin_exp = (BinaryExp) exp;
+            Value val1 = in.get((Var) bin_exp.getOperand1());
+            Value val2 = in.get((Var) bin_exp.getOperand2());
+            if (val1.isConstant() && val2.isConstant()) {
+                if (bin_exp instanceof ArithmeticExp) {
+                    String op_str = ((ArithmeticExp) bin_exp).getOperator().toString();
+                    switch (op_str) {
+                        case "+":
+                            return Value.makeConstant(val1.getConstant() + val2.getConstant());
+                        case "-":
+                            return Value.makeConstant(val1.getConstant() - val2.getConstant());
+                        case "*":
+                            return Value.makeConstant(val1.getConstant() * val2.getConstant());
+                        case "/": {
+                            if (val2.getConstant() != 0) {
+                                return Value.makeConstant(val1.getConstant() / val2.getConstant());
+                            } else {
+                                return Value.getUndef();
+                            }
+                        }
+                        case "%": {
+                            if (val2.getConstant() != 0) {
+                                return Value.makeConstant(val1.getConstant() % val2.getConstant());
+                            } else {
+                                return Value.getUndef();
+                            }
+                        }
+                    }
+                } else if (bin_exp instanceof ConditionExp) {
+                    String op_str = ((ConditionExp) bin_exp).getOperator().toString();
+                    switch (op_str) {
+                        case "==": {
+                            if (val1.getConstant() == val2.getConstant()) {
+                                return Value.makeConstant(1);
+                            } else {
+                                return Value.makeConstant(0);
+                            }
+                        }
+                        case "!=": {
+                            if (val1.getConstant() != val2.getConstant()) {
+                                return Value.makeConstant(1);
+                            } else {
+                                return Value.makeConstant(0);
+                            }
+                        }
+                        case ">=": {
+                            if (val1.getConstant() >= val2.getConstant()) {
+                                return Value.makeConstant(1);
+                            } else {
+                                return Value.makeConstant(0);
+                            }
+                        }
+                        case "<=": {
+                            if (val1.getConstant() <= val2.getConstant()) {
+                                return Value.makeConstant(1);
+                            } else {
+                                return Value.makeConstant(0);
+                            }
+                        }
+                        case ">": {
+                            if (val1.getConstant() > val2.getConstant()) {
+                                return Value.makeConstant(1);
+                            } else {
+                                return Value.makeConstant(0);
+                            }
+                        }
+                        case "<": {
+                            if (val1.getConstant() < val2.getConstant()) {
+                                return Value.makeConstant(1);
+                            } else {
+                                return Value.makeConstant(0);
+                            }
+                        }
+                    }
+                } else if (bin_exp instanceof ShiftExp) {
+                    String op_str = ((ShiftExp) bin_exp).getOperator().toString();
+                    switch (op_str) {
+                        case ">>":
+                            return Value.makeConstant(val1.getConstant() >> val2.getConstant());
+                        case "<<":
+                            return Value.makeConstant(val1.getConstant() << val2.getConstant());
+                        case ">>>":
+                            return Value.makeConstant(val1.getConstant() >>> val2.getConstant());
+                    }
+                } else if (bin_exp instanceof BitwiseExp) {
+                    String op_str = ((BitwiseExp) bin_exp).getOperator().toString();
+                    switch (op_str) {
+                        case "|":return Value.makeConstant(val1.getConstant() | val2.getConstant());
+                        case "&":return Value.makeConstant(val1.getConstant() & val2.getConstant());
+                        case "^":return Value.makeConstant(val1.getConstant() ^ val2.getConstant());
+                    }
+                }
+            } else if (val1.isNAC() || val2.isNAC()) {
+                return Value.getNAC();
+            } else {
+                return Value.getUndef();
+            }
+        }
+        return Value.getNAC();
     }
 }
