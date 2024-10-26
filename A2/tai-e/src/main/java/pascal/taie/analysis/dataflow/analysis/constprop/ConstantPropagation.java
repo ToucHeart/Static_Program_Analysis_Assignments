@@ -70,7 +70,7 @@ public class ConstantPropagation extends
     @Override
     public void meetInto(CPFact fact, CPFact target) {
         // TODO - finish me
-        for(Var var:fact.keySet()){
+        for (Var var : fact.keySet()) {
             Value v1 = fact.get(var);
             Value v2 = target.get(var);
             Value res = meetValue(v1, v2);
@@ -86,27 +86,26 @@ public class ConstantPropagation extends
         if (v1.isNAC() || v2.isNAC()) {
             return Value.getNAC();
         }
-        if (v1.isUndef() && v2.isUndef()) {
-            return Value.getUndef();
-        }
         if (v1.isConstant() && v2.isConstant()) {
             if (v1.getConstant() != v2.getConstant()) {
                 return Value.getNAC();
             } else {
-                return v1;
+                return Value.makeConstant(v1.getConstant());
             }
         }
         if (v1.isConstant())
-            return v1;
+            return Value.makeConstant(v1.getConstant());
         if (v2.isConstant())
-            return v2;
+            return Value.makeConstant(v2.getConstant());
         return Value.getUndef();
     }
 
     @Override
     public boolean transferNode(Stmt stmt, CPFact in, CPFact out) {
         // TODO - finish me
-        return false;
+        Optional<LValue> defs = stmt.getDef();
+        List<RValue> uses = stmt.getUses();
+
     }
 
     /**
@@ -149,92 +148,56 @@ public class ConstantPropagation extends
             Value val1 = in.get((Var) bin_exp.getOperand1());
             Value val2 = in.get((Var) bin_exp.getOperand2());
             if (val1.isConstant() && val2.isConstant()) {
+                int num1 = val1.getConstant(), num2 = val2.getConstant();
                 if (bin_exp instanceof ArithmeticExp) {
                     String op_str = ((ArithmeticExp) bin_exp).getOperator().toString();
                     switch (op_str) {
                         case "+":
-                            return Value.makeConstant(val1.getConstant() + val2.getConstant());
+                            return Value.makeConstant(num1 + num2);
                         case "-":
-                            return Value.makeConstant(val1.getConstant() - val2.getConstant());
+                            return Value.makeConstant(num1 - num2);
                         case "*":
-                            return Value.makeConstant(val1.getConstant() * val2.getConstant());
-                        case "/": {
-                            if (val2.getConstant() != 0) {
-                                return Value.makeConstant(val1.getConstant() / val2.getConstant());
-                            } else {
-                                return Value.getUndef();
-                            }
-                        }
-                        case "%": {
-                            if (val2.getConstant() != 0) {
-                                return Value.makeConstant(val1.getConstant() % val2.getConstant());
-                            } else {
-                                return Value.getUndef();
-                            }
-                        }
+                            return Value.makeConstant(num1 * num2);
+                        case "/":
+                            return num2 == 0 ? Value.getUndef() : Value.makeConstant(num1 / num2);
+                        case "%":
+                            return num2 == 0 ? Value.getUndef() : Value.makeConstant(num1 % num2);
                     }
                 } else if (bin_exp instanceof ConditionExp) {
                     String op_str = ((ConditionExp) bin_exp).getOperator().toString();
                     switch (op_str) {
-                        case "==": {
-                            if (val1.getConstant() == val2.getConstant()) {
-                                return Value.makeConstant(1);
-                            } else {
-                                return Value.makeConstant(0);
-                            }
-                        }
-                        case "!=": {
-                            if (val1.getConstant() != val2.getConstant()) {
-                                return Value.makeConstant(1);
-                            } else {
-                                return Value.makeConstant(0);
-                            }
-                        }
-                        case ">=": {
-                            if (val1.getConstant() >= val2.getConstant()) {
-                                return Value.makeConstant(1);
-                            } else {
-                                return Value.makeConstant(0);
-                            }
-                        }
-                        case "<=": {
-                            if (val1.getConstant() <= val2.getConstant()) {
-                                return Value.makeConstant(1);
-                            } else {
-                                return Value.makeConstant(0);
-                            }
-                        }
-                        case ">": {
-                            if (val1.getConstant() > val2.getConstant()) {
-                                return Value.makeConstant(1);
-                            } else {
-                                return Value.makeConstant(0);
-                            }
-                        }
-                        case "<": {
-                            if (val1.getConstant() < val2.getConstant()) {
-                                return Value.makeConstant(1);
-                            } else {
-                                return Value.makeConstant(0);
-                            }
-                        }
+                        case "==":
+                            return num1 == num2 ? Value.makeConstant(1) : Value.makeConstant(0);
+                        case "!=":
+                            return num1 != num2 ? Value.makeConstant(1) : Value.makeConstant(0);
+                        case ">=":
+                            return num1 >= num2 ? Value.makeConstant(1) : Value.makeConstant(0);
+                        case "<=":
+                            return num1 <= num2 ? Value.makeConstant(1) : Value.makeConstant(0);
+                        case ">":
+                            return num1 > num2 ? Value.makeConstant(1) : Value.makeConstant(0);
+                        case "<":
+                            return num1 < num2 ? Value.makeConstant(1) : Value.makeConstant(0);
                     }
                 } else if (bin_exp instanceof ShiftExp) {
                     String op_str = ((ShiftExp) bin_exp).getOperator().toString();
                     switch (op_str) {
                         case ">>":
-                            return Value.makeConstant(val1.getConstant() >> val2.getConstant());
+                            return Value.makeConstant(num1 >> num2);
                         case "<<":
-                            return Value.makeConstant(val1.getConstant() << val2.getConstant());
+                            return Value.makeConstant(num1 << num2);
                         case ">>>":
-                            return Value.makeConstant(val1.getConstant() >>> val2.getConstant());
+                            return Value.makeConstant(num1 >>> num2);
                     }
                 } else if (bin_exp instanceof BitwiseExp) {
                     String op_str = ((BitwiseExp) bin_exp).getOperator().toString();
                     switch (op_str) {
-                        case "|":return Value.makeConstant(val1.getConstant() | val2.getConstant());
-                        case "&":return Value.makeConstant(val1.getConstant() & val2.getConstant());
-                        case "^":return Value.makeConstant(val1.getConstant() ^ val2.getConstant());
+                        case "|":
+                            return Value.makeConstant(num1 | num2);
+                        case "&":
+                            return Value.makeConstant(num1 & num2);
+                        case "^":
+                            return Value.makeConstant(num1 ^ num2);
                     }
                 }
             } else if (val1.isNAC() || val2.isNAC()) {
