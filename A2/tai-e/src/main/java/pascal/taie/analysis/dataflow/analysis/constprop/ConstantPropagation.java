@@ -26,14 +26,7 @@ import pascal.taie.analysis.dataflow.analysis.AbstractDataflowAnalysis;
 import pascal.taie.analysis.graph.cfg.CFG;
 import pascal.taie.config.AnalysisConfig;
 import pascal.taie.ir.IR;
-import pascal.taie.ir.exp.ArithmeticExp;
-import pascal.taie.ir.exp.BinaryExp;
-import pascal.taie.ir.exp.BitwiseExp;
-import pascal.taie.ir.exp.ConditionExp;
-import pascal.taie.ir.exp.Exp;
-import pascal.taie.ir.exp.IntLiteral;
-import pascal.taie.ir.exp.ShiftExp;
-import pascal.taie.ir.exp.Var;
+import pascal.taie.ir.exp.*;
 import pascal.taie.ir.stmt.DefinitionStmt;
 import pascal.taie.ir.stmt.Stmt;
 import pascal.taie.language.type.PrimitiveType;
@@ -41,6 +34,8 @@ import pascal.taie.language.type.Type;
 import pascal.taie.util.AnalysisException;
 
 import java.security.Key;
+import java.util.List;
+import java.util.Optional;
 
 public class ConstantPropagation extends
         AbstractDataflowAnalysis<Stmt, CPFact> {
@@ -59,7 +54,13 @@ public class ConstantPropagation extends
     @Override
     public CPFact newBoundaryFact(CFG<Stmt> cfg) {
         // TODO - finish me
-        return new CPFact();
+        CPFact fact = new CPFact();
+        for (Var var : cfg.getIR().getParams()) {
+            if (canHoldInt(var)) {
+                fact.update(var, Value.getNAC());
+            }
+        }
+        return fact;
     }
 
     @Override
@@ -103,9 +104,25 @@ public class ConstantPropagation extends
     @Override
     public boolean transferNode(Stmt stmt, CPFact in, CPFact out) {
         // TODO - finish me
-        Optional<LValue> defs = stmt.getDef();
-        List<RValue> uses = stmt.getUses();
+        CPFact in_copy = in.copy();
+        CPFact old_out = out.copy();
 
+        if (stmt instanceof DefinitionStmt) {
+            if (((DefinitionStmt<?, ?>) stmt).getLValue() != null) {
+                LValue lval = ((DefinitionStmt<?, ?>) stmt).getLValue();
+                if (lval instanceof Var) {
+                    Var v = (Var) lval;
+                    if (canHoldInt(v)) {
+                        Value newval = evaluate(((DefinitionStmt<?, ?>) stmt).getRValue(), in);
+                        in_copy.update(v, newval);
+                        out.copyFrom(in_copy);
+                        return !old_out.equals(out);
+                    }
+                }
+            }
+        }
+        out.copyFrom(in);
+        return !old_out.equals(out);
     }
 
     /**
