@@ -63,12 +63,11 @@ class CHABuilder implements CGBuilder<Invoke, JMethod> {
         JClass method_class = callSite.getMethodRef().getDeclaringClass();
         Subsignature signature = callSite.getMethodRef().getSubsignature();
         if(callkind == CallKind.STATIC){
-
-          methods.add(method);
+            methods.add(method_class.getDeclaredMethod(signature));
         }else if(callkind == CallKind.SPECIAL) {
-
-        }else if(callkind == CallKind.VIRTUAL){
-
+            methods.add(dispatch(method_class, signature));
+        }else if(callkind == CallKind.VIRTUAL||callkind == CallKind.INTERFACE){
+            
         }
         return null;
     }
@@ -82,7 +81,7 @@ class CHABuilder implements CGBuilder<Invoke, JMethod> {
     private JMethod dispatch(JClass jclass, Subsignature subsignature) {
         // TODO - finish me
         JMethod method = jclass.getDeclaredMethod(subsignature);
-        if(method!=null) {
+        if(method!=null&&!method.isAbstract()) {
             return method;
         }
         if(jclass.getSuperClass()!=null){
