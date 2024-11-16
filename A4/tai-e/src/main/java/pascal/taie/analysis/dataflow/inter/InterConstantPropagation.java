@@ -120,19 +120,30 @@ public class InterConstantPropagation extends
     @Override
     protected CPFact transferCallEdge(CallEdge<Stmt> edge, CPFact callSiteOut) {
         // TODO - finish me
-        JMethod callee = edge.getCallee();
-        Invoke invoke = (Invoke) edge.getSource();
-        List<Var> args = invoke.getInvokeExp().getArgs();
-        List<Value> args_vals = new ArrayList<>(args.size());
-        for(Var v : args) {
-            args_vals.add(callSiteOut.get(v));
+        CPFact ans = new CPFact();
+        if(edge.getSource() instanceof Invoke invoke){
+            List<Var> args = invoke.getInvokeExp().getArgs();
+            List<Var> params = edge.getCallee().getIR().getParams();
+            for (int i = 0; i < args.size(); i++) {
+                ans.update(params.get(i), callSiteOut.get(args.get(i)));
+            }
         }
-        return  null;
+        return ans;
     }
 
     @Override
     protected CPFact transferReturnEdge(ReturnEdge<Stmt> edge, CPFact returnOut) {
         // TODO - finish me
-        return null;
+        CPFact ans = new CPFact();
+        Value value = Value.getUndef();
+        for(Var v: edge.getReturnVars()){
+            value = cp.meetValue(value,returnOut.get(v));
+        }
+        if(edge.getCallSite() instanceof Invoke invoke){
+            if(invoke.getResult()!=null){
+                ans.update(invoke.getResult(),value);
+            }
+        }
+        return ans;
     }
 }
