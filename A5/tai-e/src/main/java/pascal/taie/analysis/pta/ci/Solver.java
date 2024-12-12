@@ -230,8 +230,7 @@ class Solver {
             if (invoke.isStatic()) continue;
             JMethod method = resolveCallee(recv, invoke);
             workList.addEntry(pointerFlowGraph.getVarPtr(method.getIR().getThis()), new PointsToSet(recv));
-            if (!callGraph.contains(method)) {
-                callGraph.addEdge(new Edge<>(CallGraphs.getCallKind(invoke), invoke, method));
+            if (callGraph.addEdge(new Edge<>(CallGraphs.getCallKind(invoke), invoke, method))) {
                 addReachable(method);
                 for (int i = 0; i < invoke.getInvokeExp().getArgCount(); ++i) {
                     addPFGEdge(pointerFlowGraph.getVarPtr(invoke.getInvokeExp().getArg(i)),
