@@ -133,7 +133,10 @@ class Solver {
             workList.addEntry(
                     csManager.getCSVar(this.context, stmt.getLValue()),
                     PointsToSetFactory.make(
-                            csManager.getCSObj(this.context, heapModel.getObj(stmt))
+                            csManager.getCSObj(
+                                    contextSelector.selectHeapContext(csMethod, heapModel.getObj(stmt)),
+                                    heapModel.getObj(stmt)
+                            )
                     )
             );
             return null;
@@ -170,7 +173,10 @@ class Solver {
         public Void visit(Invoke stmt) {
             if (stmt.isStatic()) {
                 JMethod targetMethod = resolveCallee(null, stmt);
-                Context targetContext = contextSelector.selectContext(csManager.getCSCallSite(this.context, stmt), targetMethod);
+                Context targetContext = contextSelector.selectContext(
+                        csManager.getCSCallSite(this.context, stmt),
+                        targetMethod
+                );
                 addReachable(csManager.getCSMethod(targetContext, targetMethod));
                 for (int i = 0; i < stmt.getInvokeExp().getArgCount(); i++) {
                     addPFGEdge(
@@ -180,7 +186,10 @@ class Solver {
                 }
                 if (stmt.getLValue() != null) {
                     for (Var var : targetMethod.getIR().getReturnVars()) {
-                        addPFGEdge(csManager.getCSVar(targetContext, var), csManager.getCSVar(this.context, stmt.getLValue()));
+                        addPFGEdge(
+                                csManager.getCSVar(targetContext, var),
+                                csManager.getCSVar(this.context, stmt.getLValue())
+                        );
                     }
                 }
                 callGraph.addEdge(new Edge<>(
@@ -277,7 +286,32 @@ class Solver {
      */
     private void processCall(CSVar recv, CSObj recvObj) {
         // TODO - finish me
-
+        for (Invoke invoke : recv.getVar().getInvokes()) {
+            if (invoke.isStatic()) continue;
+            JMethod method = resolveCallee(recvObj, invoke);
+            Context targetContext = contextSelector.selectContext(csManager.getCSCallSite(recv.getContext(), invoke), recvObj, method);
+            workList.addEntry(csManager.getCSVar(targetContext, method.getIR().getThis()), PointsToSetFactory.make(recvObj));
+            if (callGraph.addEdge(new Edge<>(
+                            CallGraphs.getCallKind(invoke),
+                            csManager.getCSCallSite(recv.getContext(), invoke),
+                            csManager.getCSMethod(targetContext, method)))) {
+                addReachable(csManager.getCSMethod(targetContext, method));
+                for (int i = 0; i < invoke.getInvokeExp().getArgCount(); ++i) {
+                    addPFGEdge(
+                            csManager.getCSVar(recv.getContext(), invoke.getInvokeExp().getArg(i)),
+                            csManager.getCSVar(targetContext, method.getIR().getParam(i))
+                    );
+                }
+                if (invoke.getLValue() != null) {
+                    for (Var v : method.getIR().getReturnVars()) {
+                        addPFGEdge(
+                                csManager.getCSVar(targetContext, v),
+                                csManager.getCSVar(recv.getContext(), invoke.getLValue())
+                        );
+                    }
+                }
+            }
+        }
     }
 
     /**
