@@ -34,9 +34,11 @@ import pascal.taie.analysis.graph.icfg.ReturnEdge;
 import pascal.taie.analysis.pta.PointerAnalysisResult;
 import pascal.taie.config.AnalysisConfig;
 import pascal.taie.ir.IR;
+import pascal.taie.ir.exp.InstanceFieldAccess;
 import pascal.taie.ir.exp.InvokeExp;
 import pascal.taie.ir.exp.Var;
 import pascal.taie.ir.stmt.Invoke;
+import pascal.taie.ir.stmt.LoadField;
 import pascal.taie.ir.stmt.Stmt;
 import pascal.taie.language.classes.JMethod;
 
@@ -92,7 +94,21 @@ public class InterConstantPropagation extends
     @Override
     protected boolean transferNonCallNode(Stmt stmt, CPFact in, CPFact out) {
         // TODO - finish me
-        return false;
+        if (stmt instanceof LoadField loadField) {
+            CPFact in_copy = in.copy();
+            CPFact old_out = out.copy();
+            Var lhs = loadField.getLValue();
+            //compute newval:
+            if(loadField.getFieldAccess() instanceof InstanceFieldAccess instanceFieldAccess) {
+
+            }
+
+            in_copy.update(lhs, newval);
+            out.copyFrom(in_copy);
+            return !old_out.equals(out);
+        }
+        // other case:
+        return cp.transferNode(stmt, in, out);
     }
 
     @Override
