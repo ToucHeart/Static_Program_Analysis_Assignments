@@ -22,10 +22,10 @@
 
 package pascal.taie.analysis.pta.plugin.taint;
 
-import pascal.taie.util.collection.Pair;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import pascal.taie.World;
+import pascal.taie.analysis.graph.callgraph.CallGraph;
 import pascal.taie.analysis.pta.PointerAnalysisResult;
 import pascal.taie.analysis.pta.core.cs.context.Context;
 import pascal.taie.analysis.pta.core.cs.element.*;
@@ -34,6 +34,8 @@ import pascal.taie.analysis.pta.cs.Solver;
 import pascal.taie.ir.exp.Var;
 import pascal.taie.ir.stmt.Invoke;
 import pascal.taie.language.classes.JMethod;
+import pascal.taie.language.type.Type;
+import pascal.taie.util.collection.Pair;
 
 import java.util.*;
 
@@ -63,65 +65,64 @@ public class TaintAnalysiss {
         logger.info(config);
     }
 
-    // TODO - finish me
     public boolean isTaint(Obj obj) {
         return manager.isTaint(obj);
     }
 
-    public Obj processSource(Invoke invoke, JMethod callee) {
-        if (config.getSources().contains((new Source(callee, callee.getReturnType())))) {
-            return manager.makeTaint(invoke, callee.getReturnType());
+    // Call (source)
+    public Obj produceTaintObj(Invoke callSite, JMethod callee) {
+        Type type = callee.getReturnType();
+        if (config.getSources().contains(new Source(callee, type))) {
+            return manager.makeTaint(callSite, type);
         }
         return null;
     }
 
-    public Set<Pair<Var, Obj>> processTransfer(CSCallSite csCallSite, JMethod callee, CSVar recv) {
-        solver.getResult();
+    public Set<Pair<Var, Obj>> handleTaintTransfer(CSCallSite csCallSite, JMethod callee, CSVar base) {
+        Invoke callSite = csCallSite.getCallSite();
+        Var lVar = callSite.getLValue();
+        PointerAnalysisResult ptaResult = solver.getResult();
         Set<Pair<Var, Obj>> result = new HashSet<>();
-        TaintTransfer taintTransfer;
-        if (recv != null) {
-            // Call (base-to-result)
-            taintTransfer = new TaintTransfer(callee, TaintTransfer.BASE, TaintTransfer.RESULT, callee.getReturnType());
-            if (csCallSite.getCallSite().getLValue() != null && config.getTransfers().contains(taintTransfer)) {
-                for (CSObj csObj : solver.getResult().getPointsToSet(recv)) {
+        TaintTransfer transfer;
+        if (base != null) {
+            transfer = new TaintTransfer(callee, TaintTransfer.BASE, TaintTransfer.RESULT, callee.getReturnType());
+            if (config.getTransfers().contains(transfer) && lVar != null) {
+                for (CSObj csObj : ptaResult.getPointsToSet(base)) {
                     if (manager.isTaint(csObj.getObject())) {
-                        result.add(new Pair<>(
-                                csCallSite.getCallSite().getLValue(),
-                                manager.makeTaint(manager.getSourceCall(csObj.getObject()), callee.getReturnType())
-                        ));
+                        result.add(new Pair<>(lVar,
+                                manager.makeTaint(manager.getSourceCall(csObj.getObject()), callee.getReturnType())));
                     }
                 }
             }
-            // Call (arg-to-base)
-            for (int i = 0; i < csCallSite.getCallSite().getInvokeExp().getArgs().size(); i++) {
-                taintTransfer = new TaintTransfer(callee, i, TaintTransfer.BASE, recv.getType());
-                if (config.getTransfers().contains(taintTransfer)) {
-                    for (CSObj csObj : solver.getResult().getPointsToSet(csManager.getCSVar(
-                            csCallSite.getContext(),
-                            csCallSite.getCallSite().getInvokeExp().getArgs().get(i)
-                    ))) {
+            Type baseType = base.getType();
+            List<Var> args = callSite.getInvokeExp().getArgs();
+            for (int i = 0; i < args.size(); i++) {
+                Var arg = args.get(i);
+                Set<CSObj> argPts = ptaResult.getPointsToSet(csManager.getCSVar(csCallSite.getContext(), arg));
+                transfer = new TaintTransfer(callee, i, TaintTransfer.BASE, baseType);
+                if (config.getTransfers().contains(transfer)) {
+                    argPts.forEach(csObj -> {
                         if (manager.isTaint(csObj.getObject())) {
-                            result.add(new Pair<>(recv.getVar(), manager.makeTaint(manager.getSourceCall(csObj.getObject()), recv.getType())));
+                            result.add(new Pair<>(base.getVar(),
+                                    manager.makeTaint(manager.getSourceCall(csObj.getObject()), baseType)));
                         }
-                    }
+                    });
                 }
             }
         }
-        // Call (arg-to-result)
-        for (int i = 0; i < csCallSite.getCallSite().getInvokeExp().getArgs().size(); i++) {
-            taintTransfer = new TaintTransfer(callee, i, TaintTransfer.RESULT, callee.getReturnType());
-            if (config.getTransfers().contains(taintTransfer)) {
-                for (CSObj csObj : solver.getResult().getPointsToSet(csManager.getCSVar(
-                        csCallSite.getContext(),
-                        csCallSite.getCallSite().getInvokeExp().getArgs().get(i)
-                ))) {
+        List<Var> args = callSite.getInvokeExp().getArgs();
+        Type resultType = callee.getReturnType();
+        for (int i = 0; i < args.size(); i++) {
+            Var arg = args.get(i);
+            Set<CSObj> argPts = ptaResult.getPointsToSet(csManager.getCSVar(csCallSite.getContext(), arg));
+            transfer = new TaintTransfer(callee, i, TaintTransfer.RESULT, resultType);
+            if (config.getTransfers().contains(transfer)) {
+                argPts.forEach(csObj -> {
                     if (manager.isTaint(csObj.getObject())) {
-                        result.add(new Pair<>(
-                                csCallSite.getCallSite().getLValue(),
-                                manager.makeTaint(manager.getSourceCall(csObj.getObject()), callee.getReturnType())
-                        ));
+                        result.add(new Pair<>(lVar,
+                                manager.makeTaint(manager.getSourceCall(csObj.getObject()), resultType)));
                     }
-                }
+                });
             }
         }
         return result;
@@ -135,13 +136,14 @@ public class TaintAnalysiss {
     private Set<TaintFlow> collectTaintFlows() {
         Set<TaintFlow> taintFlows = new TreeSet<>();
         PointerAnalysisResult result = solver.getResult();
-        // TODO - finish me
-        // You could query pointer analysis results you need via variable result.
-        for (CSMethod csMethod : result.getCSCallGraph().reachableMethods().toList()) {
-            for (CSCallSite csCallSite : result.getCSCallGraph().getCallersOf(csMethod)) {
-                for (int i = 0; i < csCallSite.getCallSite().getInvokeExp().getArgs().size(); i++) {
-                    if (config.getSinks().contains(new Sink(csMethod.getMethod(), i))) {
-                        for (Obj obj : result.getPointsToSet(csCallSite.getCallSite().getInvokeExp().getArgs().get(i))) {
+        CallGraph<CSCallSite, CSMethod> callGraph = result.getCSCallGraph();
+        for (CSMethod csMethod : callGraph.reachableMethods().toList()) {
+            for (CSCallSite csCallSite : callGraph.getCallersOf(csMethod)) {
+                List<Var> args = csCallSite.getCallSite().getInvokeExp().getArgs();
+                for (int i = 0; i < args.size(); i++) {
+                    Sink sink = new Sink(csMethod.getMethod(), i);
+                    if (config.getSinks().contains(sink)) {
+                        for (Obj obj : result.getPointsToSet(args.get(i))) {
                             if (manager.isTaint(obj)) {
                                 taintFlows.add(new TaintFlow(manager.getSourceCall(obj), csCallSite.getCallSite(), i));
                             }

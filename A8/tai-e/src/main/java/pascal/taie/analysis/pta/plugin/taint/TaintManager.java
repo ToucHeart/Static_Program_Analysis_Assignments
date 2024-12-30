@@ -46,7 +46,8 @@ class TaintManager {
      * @param type   type of the taint object
      * @return the taint object for given source and type.
      */
-    Obj makeTaint(Invoke source, Type type) {
+    Obj
+    makeTaint(Invoke source, Type type) {
         return taints.computeIfAbsent(source, type,
                 (s, t) -> new MockObj(TAINT_DESC, s, t));
     }
