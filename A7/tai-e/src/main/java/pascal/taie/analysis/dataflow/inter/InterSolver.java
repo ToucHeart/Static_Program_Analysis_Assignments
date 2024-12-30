@@ -64,13 +64,13 @@ class InterSolver<Method, Node, Fact> {
         // TODO - finish me
         icfg.entryMethods().forEach(entryMethod -> {
             Node entry = icfg.getEntryOf(entryMethod);
-            result.setInFact(entry, analysis.newBoundaryFact(entry));
-            result.setOutFact(entry, analysis.newBoundaryFact(entry));
+            result.setInFact(entry,analysis.newBoundaryFact(entry));
+            result.setOutFact(entry,analysis.newBoundaryFact(entry));
         });
-        for (Node node : icfg) {
-            if (result.getInFact(node) == null) {
-                result.setInFact(node, analysis.newInitialFact());
-                result.setOutFact(node, analysis.newInitialFact());
+        for(Node node:icfg){
+            if(result.getInFact(node)==null){
+                result.setInFact(node,analysis.newInitialFact());
+                result.setOutFact(node,analysis.newInitialFact());
             }
         }
     }
@@ -85,16 +85,24 @@ class InterSolver<Method, Node, Fact> {
             Node head = workList.remove();
             Fact out = result.getOutFact(head);
             Fact in = result.getInFact(head);
-            for (ICFGEdge<Node> edge : icfg.getInEdgesOf(head)) {
-                analysis.meetInto(analysis.transferEdge(edge, result.getOutFact(edge.getSource())), in);
+            for (ICFGEdge<Node> edge: icfg.getInEdgesOf(head)) {
+                analysis.meetInto(analysis.transferEdge(edge,result.getOutFact(edge.getSource())), in);
             }
             if (analysis.transferNode(head, in, out)) {
                 for (Node succ : icfg.getSuccsOf(head)) {
-                    if (!workList.contains(succ)) {
+                    if(!workList.contains(succ)) {
                         workList.add(succ);
                     }
                 }
             }
         }
+    }
+
+    public void addToWorkList(Node node) {
+        workList.add(node);
+    }
+
+    public DataflowResult<Node, Fact> getResult() {
+        return result;
     }
 }
